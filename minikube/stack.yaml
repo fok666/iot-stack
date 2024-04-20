@@ -1,0 +1,287 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: influxdb-config
+data:
+  DOCKER_INFLUXDB_INIT_MODE: "setup"
+  DOCKER_INFLUXDB_INIT_USERNAME: "admin"
+  DOCKER_INFLUXDB_INIT_PASSWORD: ""
+  DOCKER_INFLUXDB_INIT_ORG: "sentinela"
+  DOCKER_INFLUXDB_INIT_BUCKET: "sentinela"
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-config
+data:
+  GF_INSTALL_PLUGINS: "grafana-clock-panel,grafana-simple-json-datasource"
+  GF_SECURITY_ADMIN_USER: "admin"
+  GF_SECURITY_ADMIN_PASSWORD: ""
+  GF_LOG_MODE: "console file"
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: mosquitto-config
+data:
+  MOSQUITTO_INCLUDE_DIR: "/mosquitto/config/sections/"
+  MOSQUITTO__PERSISTENCE__AUTOSAVE_ON_CHANGES: "true"
+  MOSQUITTO__PERSISTENCE__AUTOSAVE_INTERVAL: "100"
+  MOSQUITTO__PERSISTENCE__PERSISTENCE: "true"
+  MOSQUITTO__PERSISTENCE__PERSISTENCE_LOCATION: "/mosquitto/data/"
+  MOSQUITTO__LOGGING__LOG_DEST: "stderr"
+  mosquitto.conf: |
+    port 1883
+    allow_anonymous true
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: grafana-pv
+spec:
+  capacity:
+    storage: 10Gi
+  accessModes:
+    - ReadWriteOnce
+  hostPath:
+    path: "/var/lib/minikube/grafana/"
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: influxdb-pv
+spec:
+  capacity:
+    storage: 10Gi
+  accessModes:
+    - ReadWriteOnce
+  hostPath:
+    path: "/var/lib/minikube/influxdb/"
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: nodered-pv
+spec:
+  capacity:
+    storage: 10Gi
+  accessModes:
+    - ReadWriteOnce
+  hostPath:
+    path: "/var/lib/minikube/node-red/"
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: mosquitto-pv
+spec:
+  capacity:
+    storage: 10Gi
+  accessModes:
+    - ReadWriteOnce
+  hostPath:
+    path: "/var/lib/minikube/mosquitto/"
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: grafana-pv-claim
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: influxdb-pv-claim
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: nodered-pv-claim
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: mosquitto-pv-claim
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: grafana-deployment
+  labels:
+    app: grafana
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: grafana
+  template:
+    metadata:
+      labels:
+        app: grafana
+    spec:
+      volumes:
+        - name: grafana-pv-storage
+          persistentVolumeClaim:
+            claimName: grafana-pv-claim
+      containers:
+      - name: grafana
+        image: grafana/grafana
+        resources:
+          requests:
+            cpu: 128m
+            memory: 64M
+          limits:
+            cpu: 1024m
+            memory: 512M
+        envFrom:
+          - configMapRef:
+              name: grafana-config
+        volumeMounts:
+          - mountPath: "/var/lib/grafana"
+            name: grafana-pv-storage
+        ports:
+        - containerPort: 3000
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: influxdb-deployment
+  labels:
+    app: influxdb
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: influxdb
+  template:
+    metadata:
+      labels:
+        app: influxdb
+    spec:
+      volumes:
+        - name: influxdb-pv-storage
+          persistentVolumeClaim:
+            claimName: influxdb-pv-claim
+      containers:
+      - name: influxdb
+        image: influxdb
+        resources:
+          requests:
+            cpu: 128m
+            memory: 64M
+          limits:
+            cpu: 1024m
+            memory: 512M
+        envFrom:
+          - configMapRef:
+              name: influxdb-config
+        volumeMounts:
+          - mountPath: "/var/lib/influxdb2"
+            name: influxdb-pv-storage
+        ports:
+        - containerPort: 8086
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nodered-deployment
+  labels:
+    app: nodered
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: nodered
+  template:
+    metadata:
+      labels:
+        app: nodered
+    spec:
+      volumes:
+        - name: nodered-pv-storage
+          persistentVolumeClaim:
+            claimName: nodered-pv-claim
+      containers:
+      - name: nodered
+        image: nodered/node-red
+        resources:
+          requests:
+            cpu: 128m
+            memory: 64M
+          limits:
+            cpu: 1024m
+            memory: 512M
+        volumeMounts:
+          - mountPath: "/data"
+            name: nodered-pv-storage
+        ports:
+        - containerPort: 1880
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mosquitto-deployment
+  labels:
+    app: mosquitto
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mosquitto
+  template:
+    metadata:
+      labels:
+        app: mosquitto
+    spec:
+      volumes:
+        - name: mosquitto-pv-storage
+          persistentVolumeClaim:
+            claimName: mosquitto-pv-claim
+        - name: config-file
+          configMap:
+            name: mosquitto-config
+      containers:
+      - name: mosquitto
+        image: eclipse-mosquitto
+        resources:
+          requests:
+            cpu: 128m
+            memory: 64M
+          limits:
+            cpu: 1024m
+            memory: 512M
+        envFrom:
+          - configMapRef:
+              name: mosquitto-config
+        volumeMounts:
+          - mountPath: "/mosquitto"
+            name: mosquitto-pv-storage
+          - name: config-file
+            mountPath: /mosquitto/config/mosquitto.conf
+            subPath: mosquitto.conf   
+        ports:
+        - containerPort: 1883
+        - containerPort: 9001
